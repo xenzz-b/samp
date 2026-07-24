@@ -33,13 +33,42 @@ Sesuaikan kredensial di `gamemodes/main.pwn`:
 Download **MySQL plugin R41-4** dari:
 https://github.com/pBlueG/SA-MP-MySQL/releases/tag/R41-4
 
-| OS | File | Letakkan di |
-|----|------|-------------|
-| Windows | `mysql.dll` | `plugins/mysql.dll` |
-| Linux | `mysql.so` | `plugins/mysql.so` |
+Ambil file **`mysql-R41-4-win32.zip`** (Windows).
 
-Include sudah tersedia di `pawno/include/a_mysql.inc`.
+**Penting:** ekstrak **seluruh isi** zip ke folder server, jangan cuma `mysql.dll`.
 
+Struktur yang benar:
+
+```
+samp-server.exe
+libmariadb.dll          <-- WAJIB di root server (selevel samp-server.exe)
+plugins/
+  mysql.dll             <-- di dalam folder plugins
+pawno/include/
+  a_mysql.inc           <-- sudah ada di repo ini
+```
+
+| File | Lokasi |
+|------|--------|
+| `mysql.dll` | `plugins/mysql.dll` |
+| `libmariadb.dll` | root server (satu folder dengan `samp-server.exe`) |
+
+Kalau log masih `Loading plugin: mysql` → `Failed.`:
+
+1. Pastikan `libmariadb.dll` ada di root (bukan di `plugins/`)
+2. Install **Visual C++ Redistributable x86 (32-bit)**:
+   - [VC++ 2015-2022 x86](https://aka.ms/vs/17/release/vc_redist.x86.exe)
+   - [VC++ 2010 x86](https://www.microsoft.com/en-us/download/details.aspx?id=26999)
+3. Jangan pakai `mysql.so` di Windows
+4. Restart PC setelah install redistributable, lalu jalankan `samp-server.exe` lagi
+
+Log sukses harus mirip:
+
+```
+Loading plugin: mysql
+  >> plugin.mysql: R41-4 successfully loaded.
+  Loaded 1 plugins.
+```
 ### 3. Compile gamemode
 
 Buka `gamemodes/main.pwn` di Pawno lalu tekan F5, atau:
