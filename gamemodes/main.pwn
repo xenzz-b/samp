@@ -2,23 +2,23 @@
 #include <a_mysql>
 
 #undef MAX_PLAYERS
-#define MAX_PLAYERS 50
+#define MAX_PLAYERS             50
 
-#define MYSQL_HOST      "127.0.0.1"
-#define MYSQL_USER      "root"
-#define MYSQL_PASSWORD  ""
-#define MYSQL_DATABASE  "samp"
+#define MYSQL_HOST              "127.0.0.1"
+#define MYSQL_USER              "root"
+#define MYSQL_PASSWORD          ""
+#define MYSQL_DATABASE          "samp"
 
-#define SECONDS_TO_LOGIN 60
+#define SECONDS_TO_LOGIN        60
 
-#define DEFAULT_POS_X   1958.3783
-#define DEFAULT_POS_Y   1343.1572
-#define DEFAULT_POS_Z   15.3746
-#define DEFAULT_POS_A   270.1425
+#define DEFAULT_POS_X           1958.3783
+#define DEFAULT_POS_Y           1343.1572
+#define DEFAULT_POS_Z           15.3746
+#define DEFAULT_POS_A           270.1425
 
-#define COLOR_LIGHTRED  0xFF6347FF
-#define COLOR_YELLOW    0xFFFF00FF
-#define COLOR_GREEN     0x33AA33FF
+#define COLOR_LIGHTRED          0xFF6347FF
+#define COLOR_YELLOW            0xFFFF00FF
+#define COLOR_GREEN             0x33AA33FF
 
 new MySQL:g_SQL;
 new g_MysqlRaceCheck[MAX_PLAYERS];
@@ -61,6 +61,24 @@ main()
     print("----------------------------------");
 }
 
+stock Database_Connect()
+{
+    new MySQLOpt:opts = mysql_init_options();
+    mysql_set_option(opts, AUTO_RECONNECT, true);
+
+    g_SQL = mysql_connect(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, opts);
+    if(g_SQL == MYSQL_INVALID_HANDLE || mysql_errno(g_SQL) != 0)
+    {
+        print("[MySQL] Koneksi gagal. Server dimatikan.");
+        SendRconCommand("exit");
+        return 0;
+    }
+
+    mysql_set_charset("utf8mb4", g_SQL);
+    print("[MySQL] Koneksi berhasil.");
+    return 1;
+}
+
 public OnGameModeInit()
 {
     SetGameModeText("RP v1.0");
@@ -71,19 +89,8 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     UsePlayerPedAnims();
 
-    new MySQLOpt:opts = mysql_init_options();
-    mysql_set_option(opts, AUTO_RECONNECT, true);
+    if(!Database_Connect()) return 1;
 
-    g_SQL = mysql_connect(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, opts);
-    if(g_SQL == MYSQL_INVALID_HANDLE || mysql_errno(g_SQL) != 0)
-    {
-        print("[MySQL] Koneksi gagal. Server dimatikan.");
-        SendRconCommand("exit");
-        return 1;
-    }
-
-    print("[MySQL] Koneksi berhasil.");
-    mysql_set_charset("utf8mb4", g_SQL);
     SetupPlayerTable();
 
     AddPlayerClass(0, DEFAULT_POS_X, DEFAULT_POS_Y, DEFAULT_POS_Z, DEFAULT_POS_A, 0, 0, 0, 0, 0, 0);
@@ -96,6 +103,7 @@ public OnGameModeExit()
     {
         if(IsPlayerConnected(i)) OnPlayerDisconnect(i, 1);
     }
+
     mysql_close(g_SQL);
     return 1;
 }
@@ -110,10 +118,8 @@ public OnPlayerConnect(playerid)
     GetPlayerName(playerid, Player[playerid][pName], MAX_PLAYER_NAME);
     TogglePlayerSpectating(playerid, true);
 
-    new query[128];
-    mysql_format(g_SQL, query, sizeof(query),
-        "SELECT * FROM `players` WHERE `username` = '%e' LIMIT 1",
-        Player[playerid][pName]);
+    new query[144];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT * FROM `players` WHERE `username` = '%e' LIMIT 1", Player[playerid][pName]);
     mysql_tquery(g_SQL, query, "OnPlayerDataLoaded", "dd", playerid, g_MysqlRaceCheck[playerid]);
     return 1;
 }
@@ -167,7 +173,6 @@ public OnPlayerSpawn(playerid)
     SetPlayerScore(playerid, Player[playerid][pScore]);
     ResetPlayerMoney(playerid);
     GivePlayerMoney(playerid, Player[playerid][pMoney]);
-
     SetPlayerInterior(playerid, Player[playerid][pInterior]);
     SetPlayerVirtualWorld(playerid, Player[playerid][pWorld]);
     SetPlayerPos(playerid, Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ]);
@@ -181,20 +186,18 @@ public OnPlayerDeath(playerid, killerid, reason)
     if(Player[playerid][pLogged])
     {
         Player[playerid][pDeaths]++;
+
         new query[96];
-        mysql_format(g_SQL, query, sizeof(query),
-            "UPDATE `players` SET `deaths` = %d WHERE `id` = %d LIMIT 1",
-            Player[playerid][pDeaths], Player[playerid][pID]);
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE `players` SET `deaths` = %d WHERE `id` = %d LIMIT 1", Player[playerid][pDeaths], Player[playerid][pID]);
         mysql_tquery(g_SQL, query);
     }
 
     if(killerid != INVALID_PLAYER_ID && Player[killerid][pLogged])
     {
         Player[killerid][pKills]++;
+
         new query[96];
-        mysql_format(g_SQL, query, sizeof(query),
-            "UPDATE `players` SET `kills` = %d WHERE `id` = %d LIMIT 1",
-            Player[killerid][pKills], Player[killerid][pID]);
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE `players` SET `kills` = %d WHERE `id` = %d LIMIT 1", Player[killerid][pKills], Player[killerid][pID]);
         mysql_tquery(g_SQL, query);
     }
     return 1;
@@ -211,8 +214,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if(!strcmp(cmdtext, "/stats", true))
     {
         new str[144];
-        format(str, sizeof(str),
-            "Nama: %s | Score: %d | Money: $%d | Kills: %d | Deaths: %d",
+        format(str, sizeof(str), "Nama: %s | Score: %d | Money: $%d | Kills: %d | Deaths: %d",
             Player[playerid][pName],
             Player[playerid][pScore],
             Player[playerid][pMoney],
@@ -257,9 +259,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 SendClientMessage(playerid, COLOR_GREEN, "Login berhasil. Selamat datang kembali!");
 
                 new query[128];
-                mysql_format(g_SQL, query, sizeof(query),
-                    "UPDATE `players` SET `last_login` = CURRENT_TIMESTAMP WHERE `id` = %d LIMIT 1",
-                    Player[playerid][pID]);
+                mysql_format(g_SQL, query, sizeof(query), "UPDATE `players` SET `last_login` = CURRENT_TIMESTAMP WHERE `id` = %d LIMIT 1", Player[playerid][pID]);
                 mysql_tquery(g_SQL, query);
 
                 SpawnPlayerAccount(playerid);
@@ -290,8 +290,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if(len < 6 || len > 32)
                 return ShowRegisterDialog(playerid, "Password harus 6-32 karakter.");
 
-            for(new i = 0; i < 16; i++)
-                Player[playerid][pSalt][i] = random(94) + 33;
+            for(new i = 0; i < 16; i++) Player[playerid][pSalt][i] = random(94) + 33;
             Player[playerid][pSalt][16] = EOS;
 
             SHA256_PassHash(inputtext, Player[playerid][pSalt], Player[playerid][pPassword], 65);
@@ -300,10 +299,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             GetPlayerIp(playerid, ip, sizeof(ip));
             mysql_format(g_SQL, query, sizeof(query),
                 "INSERT INTO `players` (`username`, `password`, `salt`, `ip`) VALUES ('%e', '%e', '%e', '%e')",
-                Player[playerid][pName],
-                Player[playerid][pPassword],
-                Player[playerid][pSalt],
-                ip);
+                Player[playerid][pName], Player[playerid][pPassword], Player[playerid][pSalt], ip);
             mysql_tquery(g_SQL, query, "OnPlayerRegister", "d", playerid);
             return 1;
         }
@@ -376,10 +372,8 @@ public KickPlayerDelayed(playerid)
 stock ShowLoginDialog(playerid, const extra[])
 {
     new str[256];
-    if(extra[0])
-        format(str, sizeof(str), "{FFFFFF}Akun: {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Masukkan password:", Player[playerid][pName], extra);
-    else
-        format(str, sizeof(str), "{FFFFFF}Akun: {FFFF00}%s\n{FFFFFF}Akun ini sudah terdaftar.\nMasukkan password:", Player[playerid][pName]);
+    if(extra[0]) format(str, sizeof(str), "{FFFFFF}Akun: {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Masukkan password:", Player[playerid][pName], extra);
+    else format(str, sizeof(str), "{FFFFFF}Akun: {FFFF00}%s\n{FFFFFF}Akun ini sudah terdaftar.\nMasukkan password:", Player[playerid][pName]);
 
     ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_PASSWORD, "Login", str, "Masuk", "Keluar");
     return 1;
@@ -388,10 +382,8 @@ stock ShowLoginDialog(playerid, const extra[])
 stock ShowRegisterDialog(playerid, const extra[])
 {
     new str[256];
-    if(extra[0])
-        format(str, sizeof(str), "{FFFFFF}Selamat datang, {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Buat password (6-32 karakter):", Player[playerid][pName], extra);
-    else
-        format(str, sizeof(str), "{FFFFFF}Selamat datang, {FFFF00}%s\n{FFFFFF}Akun belum terdaftar.\nBuat password (6-32 karakter):", Player[playerid][pName]);
+    if(extra[0]) format(str, sizeof(str), "{FFFFFF}Selamat datang, {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Buat password (6-32 karakter):", Player[playerid][pName], extra);
+    else format(str, sizeof(str), "{FFFFFF}Selamat datang, {FFFF00}%s\n{FFFFFF}Akun belum terdaftar.\nBuat password (6-32 karakter):", Player[playerid][pName]);
 
     ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Register", str, "Daftar", "Keluar");
     return 1;
@@ -440,27 +432,29 @@ stock DelayedKick(playerid, time = 500)
 
 stock SetupPlayerTable()
 {
-    new query[768];
+    new query[700];
+    query[0] = EOS;
     strcat(query, "CREATE TABLE IF NOT EXISTS `players` (");
-    strcat(query, "`id` INT(11) NOT NULL AUTO_INCREMENT,");
+    strcat(query, "`id` INT NOT NULL AUTO_INCREMENT,");
     strcat(query, "`username` VARCHAR(24) NOT NULL,");
     strcat(query, "`password` CHAR(64) NOT NULL,");
     strcat(query, "`salt` CHAR(16) NOT NULL,");
     strcat(query, "`ip` VARCHAR(16) NOT NULL DEFAULT '',");
-    strcat(query, "`score` INT(11) NOT NULL DEFAULT 0,");
-    strcat(query, "`money` INT(11) NOT NULL DEFAULT 5000,");
-    strcat(query, "`skin` INT(11) NOT NULL DEFAULT 26,");
-    strcat(query, "`kills` INT(11) NOT NULL DEFAULT 0,");
-    strcat(query, "`deaths` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`score` INT NOT NULL DEFAULT 0,");
+    strcat(query, "`money` INT NOT NULL DEFAULT 5000,");
+    strcat(query, "`skin` INT NOT NULL DEFAULT 26,");
+    strcat(query, "`kills` INT NOT NULL DEFAULT 0,");
+    strcat(query, "`deaths` INT NOT NULL DEFAULT 0,");
     strcat(query, "`pos_x` FLOAT NOT NULL DEFAULT 0,");
     strcat(query, "`pos_y` FLOAT NOT NULL DEFAULT 0,");
     strcat(query, "`pos_z` FLOAT NOT NULL DEFAULT 0,");
     strcat(query, "`pos_a` FLOAT NOT NULL DEFAULT 0,");
-    strcat(query, "`interior` INT(11) NOT NULL DEFAULT 0,");
-    strcat(query, "`world` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`interior` INT NOT NULL DEFAULT 0,");
+    strcat(query, "`world` INT NOT NULL DEFAULT 0,");
     strcat(query, "`created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,");
     strcat(query, "`last_login` TIMESTAMP NULL DEFAULT NULL,");
-    strcat(query, "PRIMARY KEY (`id`), UNIQUE KEY `username` (`username`))");
+    strcat(query, "PRIMARY KEY (`id`),");
+    strcat(query, "UNIQUE KEY `username` (`username`))");
     strcat(query, " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     mysql_tquery(g_SQL, query);
     return 1;
@@ -481,19 +475,12 @@ stock SavePlayerData(playerid, reason)
         Player[playerid][pSkin] = GetPlayerSkin(playerid);
     }
 
-    new query[320];
+    new query[280];
     mysql_format(g_SQL, query, sizeof(query),
         "UPDATE `players` SET `score`=%d,`money`=%d,`skin`=%d,`pos_x`=%f,`pos_y`=%f,`pos_z`=%f,`pos_a`=%f,`interior`=%d,`world`=%d WHERE `id`=%d LIMIT 1",
-        Player[playerid][pScore],
-        Player[playerid][pMoney],
-        Player[playerid][pSkin],
-        Player[playerid][pPosX],
-        Player[playerid][pPosY],
-        Player[playerid][pPosZ],
-        Player[playerid][pPosA],
-        Player[playerid][pInterior],
-        Player[playerid][pWorld],
-        Player[playerid][pID]);
+        Player[playerid][pScore], Player[playerid][pMoney], Player[playerid][pSkin],
+        Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ], Player[playerid][pPosA],
+        Player[playerid][pInterior], Player[playerid][pWorld], Player[playerid][pID]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
