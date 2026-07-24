@@ -1,0 +1,100 @@
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:42:06] 
+[23:42:06] Server Plugins
+[23:42:06] --------------
+[23:42:06]  Loaded 0 plugins.
+
+[23:42:06] I couldn't load any gamemode scripts. Please verify your server.cfg
+[23:42:06] It needs a gamemode0 line at the very least.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:42:09] 
+[23:42:09] Server Plugins
+[23:42:09] --------------
+[23:42:09]  Loaded 0 plugins.
+
+[23:42:09] I couldn't load any gamemode scripts. Please verify your server.cfg
+[23:42:09] It needs a gamemode0 line at the very least.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:42:21] 
+[23:42:21] Server Plugins
+[23:42:21] --------------
+[23:42:21]  Loaded 0 plugins.
+
+[23:42:21] I couldn't load any gamemode scripts. Please verify your server.cfg
+[23:42:21] It needs a gamemode0 line at the very least.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:42:55] Error: Your password must be changed from the default password, please change it.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:42:57] Error: Your password must be changed from the default password, please change it.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:43:14] 
+[23:43:14] Server Plugins
+[23:43:14] --------------
+[23:43:14]  Loaded 0 plugins.
+
+[23:43:14] I couldn't load any gamemode scripts. Please verify your server.cfg
+[23:43:14] It needs a gamemode0 line at the very least.
+
+----------
+Loaded log file: "server_log.txt".
+----------
+
+SA-MP Dedicated Server
+----------------------
+v0.3.7-R2, (C)2005-2015 SA-MP Team
+
+[23:43:38] 
+[23:43:38] Server Plugins
+[23:43:38] --------------
+[23:43:38]  Loaded 0 plugins.
+
+[23:43:38] I couldn't load any gamemode scripts. Please verify your server.cfg
+[23:43:38] It needs a gamemode0 line at the very least.
