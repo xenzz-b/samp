@@ -52,8 +52,12 @@ enum E_PLAYER
     Cache:pCache,
     bool:pLogged,
     bool:pSpawned,
+    bool:pUcpChecked,
+    bool:pIsRegistered,
+    bool:pAuthShown,
     pLoginTries,
     pLoginTimer,
+    pAuthTimer,
     pCharCount,
     pCharListID[MAX_CHARACTERS],
     pCharListLevel[MAX_CHARACTERS],
@@ -135,14 +139,20 @@ public OnPlayerConnect(playerid)
     GetPlayerName(playerid, Player[playerid][pUcpName], MAX_PLAYER_NAME);
 
     SetPlayerColor(playerid, 0xAAAAAAAA);
-    TogglePlayerSpectating(playerid, true);
     SetPlayerVirtualWorld(playerid, playerid + 1000);
+    TogglePlayerSpectating(playerid, true);
+    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
+    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat akun UCP...");
 
     new query[160];
     mysql_format(g_SQL, query, sizeof(query),
         "SELECT `id`, `password`, `salt`, `admin` FROM `ucp` WHERE `username` = '%e' LIMIT 1",
         Player[playerid][pUcpName]);
     mysql_tquery(g_SQL, query, "OnUcpCheck", "dd", playerid, g_RaceCheck[playerid]);
+
+    Player[playerid][pAuthTimer] = SetTimerEx("ForceAuthScreen", 500, true, "d", playerid);
     return 1;
 }
 
@@ -163,6 +173,12 @@ public OnPlayerDisconnect(playerid, reason)
         Player[playerid][pLoginTimer] = 0;
     }
 
+    if(Player[playerid][pAuthTimer])
+    {
+        KillTimer(Player[playerid][pAuthTimer]);
+        Player[playerid][pAuthTimer] = 0;
+    }
+
     Player[playerid][pLogged] = false;
     Player[playerid][pSpawned] = false;
     return 1;
@@ -170,17 +186,28 @@ public OnPlayerDisconnect(playerid, reason)
 
 public OnPlayerRequestClass(playerid, classid)
 {
-    if(!Player[playerid][pSpawned])
-    {
-        TogglePlayerSpectating(playerid, true);
-        return 0;
-    }
-    return 1;
+    #pragma unused classid
+    if(Player[playerid][pSpawned]) return 1;
+
+    TogglePlayerSpectating(playerid, true);
+    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
+    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
+
+    if(Player[playerid][pUcpChecked] && !Player[playerid][pAuthShown] && !Player[playerid][pLogged])
+        ShowAuthForPlayer(playerid);
+
+    return 0;
 }
 
 public OnPlayerRequestSpawn(playerid)
 {
-    if(!Player[playerid][pSpawned]) return 0;
+    if(!Player[playerid][pSpawned])
+    {
+        TogglePlayerSpectating(playerid, true);
+        if(Player[playerid][pUcpChecked] && !Player[playerid][pLogged])
+            ShowAuthForPlayer(playerid);
+        return 0;
+    }
     return 1;
 }
 
@@ -283,6 +310,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
 
             Player[playerid][pLogged] = true;
+            Player[playerid][pAuthShown] = false;
+            if(Player[playerid][pAuthTimer])
+            {
+                KillTimer(Player[playerid][pAuthTimer]);
+                Player[playerid][pAuthTimer] = 0;
+            }
             SendClientMessage(playerid, COLOR_GREEN, "Login UCP berhasil.");
 
             new query[128], ip[16];
@@ -385,6 +418,8 @@ public OnUcpCheck(playerid, race_check)
     if(race_check != g_RaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
+    Player[playerid][pUcpChecked] = true;
+
     if(cache_num_rows())
     {
         cache_get_value_name_int(0, "id", Player[playerid][pUcpID]);
@@ -392,25 +427,65 @@ public OnUcpCheck(playerid, race_check)
         cache_get_value_name(0, "salt", Player[playerid][pSalt], 17);
         cache_get_value_name_int(0, "admin", Player[playerid][pAdmin]);
         Player[playerid][pCache] = cache_save();
+        Player[playerid][pIsRegistered] = true;
 
-        SetTimerEx("ShowAuthDialog", 200, false, "dd", playerid, 1);
+        if(Player[playerid][pLoginTimer]) KillTimer(Player[playerid][pLoginTimer]);
         Player[playerid][pLoginTimer] = SetTimerEx("OnLoginTimeout", SECONDS_TO_LOGIN * 1000, false, "d", playerid);
     }
     else
     {
-        SetTimerEx("ShowAuthDialog", 200, false, "dd", playerid, 0);
+        Player[playerid][pIsRegistered] = false;
     }
+
+    ShowAuthForPlayer(playerid);
     return 1;
 }
 
-forward ShowAuthDialog(playerid, is_login);
-public ShowAuthDialog(playerid, is_login)
+forward ForceAuthScreen(playerid);
+public ForceAuthScreen(playerid)
 {
     if(!IsPlayerConnected(playerid)) return 0;
+
+    if(Player[playerid][pLogged] || Player[playerid][pSpawned])
+    {
+        if(Player[playerid][pAuthTimer])
+        {
+            KillTimer(Player[playerid][pAuthTimer]);
+            Player[playerid][pAuthTimer] = 0;
+        }
+        return 0;
+    }
+
+    TogglePlayerSpectating(playerid, true);
+    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
+    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
+
+    if(Player[playerid][pUcpChecked] && !Player[playerid][pAuthShown])
+        ShowAuthForPlayer(playerid);
+
+    return 1;
+}
+
+public OnQueryError(errorid, const error[], const callback[], const query[], MySQL:handle)
+{
+    #pragma unused handle
+    printf("[MySQL ERROR] (%d) %s | callback: %s | query: %s", errorid, error, callback, query);
+    return 1;
+}
+
+stock ShowAuthForPlayer(playerid)
+{
+    if(!IsPlayerConnected(playerid)) return 0;
+    if(!Player[playerid][pUcpChecked]) return 0;
     if(Player[playerid][pLogged] || Player[playerid][pSpawned]) return 0;
 
     TogglePlayerSpectating(playerid, true);
-    if(is_login) ShowLoginDialog(playerid, "");
+    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
+    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
+
+    Player[playerid][pAuthShown] = true;
+
+    if(Player[playerid][pIsRegistered]) ShowLoginDialog(playerid, "");
     else ShowRegisterDialog(playerid, "");
     return 1;
 }
@@ -430,6 +505,13 @@ public OnUcpRegistered(playerid, race_check)
     Player[playerid][pUcpID] = cache_insert_id();
     Player[playerid][pLogged] = true;
     Player[playerid][pAdmin] = 0;
+    Player[playerid][pAuthShown] = false;
+
+    if(Player[playerid][pAuthTimer])
+    {
+        KillTimer(Player[playerid][pAuthTimer]);
+        Player[playerid][pAuthTimer] = 0;
+    }
 
     SendClientMessage(playerid, COLOR_GREEN, "Registrasi UCP berhasil.");
     LoadCharacterList(playerid);
@@ -701,6 +783,14 @@ stock SpawnSelectedCharacter(playerid)
     }
 
     Player[playerid][pSpawned] = true;
+    Player[playerid][pAuthShown] = false;
+
+    if(Player[playerid][pAuthTimer])
+    {
+        KillTimer(Player[playerid][pAuthTimer]);
+        Player[playerid][pAuthTimer] = 0;
+    }
+
     TogglePlayerSpectating(playerid, false);
     SetSpawnInfo(playerid, NO_TEAM, Player[playerid][pSkin],
         Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ], Player[playerid][pPosA],
