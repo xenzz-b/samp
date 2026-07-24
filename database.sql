@@ -1,0 +1,25 @@
+CREATE DATABASE IF NOT EXISTS `samp` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `samp`;
+
+CREATE TABLE IF NOT EXISTS `players` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(24) NOT NULL,
+    `password` CHAR(64) NOT NULL,
+    `salt` CHAR(16) NOT NULL,
+    `ip` VARCHAR(16) NOT NULL DEFAULT '',
+    `score` INT(11) NOT NULL DEFAULT 0,
+    `money` INT(11) NOT NULL DEFAULT 5000,
+    `skin` INT(11) NOT NULL DEFAULT 26,
+    `kills` INT(11) NOT NULL DEFAULT 0,
+    `deaths` INT(11) NOT NULL DEFAULT 0,
+    `pos_x` FLOAT NOT NULL DEFAULT 0,
+    `pos_y` FLOAT NOT NULL DEFAULT 0,
+    `pos_z` FLOAT NOT NULL DEFAULT 0,
+    `pos_a` FLOAT NOT NULL DEFAULT 0,
+    `interior` INT(11) NOT NULL DEFAULT 0,
+    `world` INT(11) NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_login` TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
