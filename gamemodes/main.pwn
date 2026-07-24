@@ -109,7 +109,6 @@ public OnGameModeInit()
     SetNameTagDrawDistance(20.0);
     EnableStuntBonusForAll(0);
     DisableInteriorEnterExits();
-    UsePlayerPedAnims();
     ManualVehicleEngineAndLights();
 
     if(!Database_Connect()) return 1;
