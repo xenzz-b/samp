@@ -3,7 +3,7 @@
 
 #undef MAX_PLAYERS
 #define MAX_PLAYERS             50
-#define MAX_CHARACTERS          3
+#define MAX_CHARS               3
 
 #define MYSQL_HOST              "127.0.0.1"
 #define MYSQL_USER              "root"
@@ -22,51 +22,48 @@
 #define COLOR_YELLOW            0xFFFF00FF
 #define COLOR_GREEN             0x33AA33FF
 #define COLOR_GREY              0xAFAFAFFF
+#define COLOR_ORANGE            0xFFA500FF
 
 new MySQL:g_SQL;
-new g_RaceCheck[MAX_PLAYERS];
+new g_MysqlRaceCheck[MAX_PLAYERS];
 
-enum E_PLAYER
+enum E_ACCOUNT
 {
-    pUcpID,
-    pCharID,
-    pUcpName[MAX_PLAYER_NAME],
-    pCharName[MAX_PLAYER_NAME],
+    pID,
+    pUCP[MAX_PLAYER_NAME],
+    pName[MAX_PLAYER_NAME],
+    pIP[16],
     pPassword[65],
     pSalt[17],
     pAdmin,
     pLevel,
     pMoney,
-    pBank,
+    pBankMoney,
     pSkin,
     pGender,
     pAge,
     Float:pHealth,
-    Float:pArmour,
+    Float:pArmor,
     Float:pPosX,
     Float:pPosY,
     Float:pPosZ,
     Float:pPosA,
     pInterior,
     pWorld,
-    Cache:pCache,
-    bool:pLogged,
+    bool:IsLoggedIn,
     bool:pSpawned,
-    bool:pUcpChecked,
-    bool:pIsRegistered,
-    bool:pAuthShown,
-    pLoginTries,
+    bool:pUCPLogged,
+    pLoginAttempts,
     pLoginTimer,
-    pAuthTimer,
     pCharCount,
-    pCharListID[MAX_CHARACTERS],
-    pCharListLevel[MAX_CHARACTERS],
-    pCharListSkin[MAX_CHARACTERS],
-    pSelectedSlot,
-    pTempGender
+    pCharListID[MAX_CHARS],
+    pCharListLevel[MAX_CHARS],
+    pCharListMoney[MAX_CHARS],
+    pTempGender,
+    pTempAge
 };
-new Player[MAX_PLAYERS][E_PLAYER];
-new CharListName[MAX_PLAYERS][MAX_CHARACTERS][MAX_PLAYER_NAME];
+new AccountData[MAX_PLAYERS][E_ACCOUNT];
+new CharListName[MAX_PLAYERS][MAX_CHARS][MAX_PLAYER_NAME];
 
 enum
 {
@@ -133,79 +130,70 @@ public OnGameModeExit()
 
 public OnPlayerConnect(playerid)
 {
-    g_RaceCheck[playerid]++;
-    ResetPlayerVars(playerid);
+    g_MysqlRaceCheck[playerid]++;
+    ResetAccountData(playerid);
 
-    GetPlayerName(playerid, Player[playerid][pUcpName], MAX_PLAYER_NAME);
+    GetPlayerName(playerid, AccountData[playerid][pUCP], MAX_PLAYER_NAME);
+    GetPlayerIp(playerid, AccountData[playerid][pIP], 16);
 
     SetPlayerColor(playerid, 0xAAAAAAAA);
-    SetPlayerVirtualWorld(playerid, playerid + 1000);
-    TogglePlayerSpectating(playerid, true);
-    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
-    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
-
-    SendClientMessage(playerid, COLOR_YELLOW, "Memuat akun UCP...");
-
-    new query[160];
-    mysql_format(g_SQL, query, sizeof(query),
-        "SELECT `id`, `password`, `salt`, `admin` FROM `ucp` WHERE `username` = '%e' LIMIT 1",
-        Player[playerid][pUcpName]);
-    mysql_tquery(g_SQL, query, "OnUcpCheck", "dd", playerid, g_RaceCheck[playerid]);
-
-    Player[playerid][pAuthTimer] = SetTimerEx("ForceAuthScreen", 500, true, "d", playerid);
     return 1;
 }
 
 public OnPlayerDisconnect(playerid, reason)
 {
-    g_RaceCheck[playerid]++;
+    g_MysqlRaceCheck[playerid]++;
     SaveCharacterData(playerid, reason);
 
-    if(cache_is_valid(Player[playerid][pCache]))
+    if(AccountData[playerid][pLoginTimer])
     {
-        cache_delete(Player[playerid][pCache]);
-        Player[playerid][pCache] = MYSQL_INVALID_CACHE;
+        KillTimer(AccountData[playerid][pLoginTimer]);
+        AccountData[playerid][pLoginTimer] = 0;
     }
 
-    if(Player[playerid][pLoginTimer])
-    {
-        KillTimer(Player[playerid][pLoginTimer]);
-        Player[playerid][pLoginTimer] = 0;
-    }
-
-    if(Player[playerid][pAuthTimer])
-    {
-        KillTimer(Player[playerid][pAuthTimer]);
-        Player[playerid][pAuthTimer] = 0;
-    }
-
-    Player[playerid][pLogged] = false;
-    Player[playerid][pSpawned] = false;
+    AccountData[playerid][IsLoggedIn] = false;
+    AccountData[playerid][pSpawned] = false;
+    AccountData[playerid][pUCPLogged] = false;
     return 1;
 }
 
 public OnPlayerRequestClass(playerid, classid)
 {
     #pragma unused classid
-    if(Player[playerid][pSpawned]) return 1;
 
-    TogglePlayerSpectating(playerid, true);
-    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
-    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
+    if(IsPlayerNPC(playerid)) return Kick(playerid);
 
-    if(Player[playerid][pUcpChecked] && !Player[playerid][pAuthShown] && !Player[playerid][pLogged])
-        ShowAuthForPlayer(playerid);
+    if(!AccountData[playerid][IsLoggedIn])
+    {
+        TogglePlayerSpectating(playerid, true);
+        SetPlayerCameraPos(playerid, 1611.0950, -977.3692, 120.9438);
+        SetPlayerCameraLookAt(playerid, 1590.8446, -2051.6296, 120.9438);
+        InterpolateCameraPos(playerid, 1611.0950, -977.3692, 120.9438, 1659.8245, -2007.6086, 120.9438, 50000, CAMERA_MOVE);
 
-    return 0;
+        if(IsUCPAlreadyOnline(playerid))
+        {
+            new str[128];
+            format(str, sizeof(str), "[Anti-Double Login] UCP %s sudah online!", AccountData[playerid][pUCP]);
+            SendClientMessage(playerid, COLOR_LIGHTRED, str);
+            DelayedKick(playerid);
+            return 1;
+        }
+
+        new query[160];
+        mysql_format(g_SQL, query, sizeof(query),
+            "SELECT * FROM `player_ucp` WHERE `UCP` = '%e' LIMIT 1",
+            AccountData[playerid][pUCP]);
+        mysql_tquery(g_SQL, query, "CheckPlayerUCP", "dd", playerid, g_MysqlRaceCheck[playerid]);
+    }
+    return 1;
 }
 
 public OnPlayerRequestSpawn(playerid)
 {
-    if(!Player[playerid][pSpawned])
+    if(!AccountData[playerid][IsLoggedIn] || !AccountData[playerid][pSpawned])
     {
+        SendClientMessage(playerid, COLOR_LIGHTRED, "Tombol spawn dinonaktifkan. Login UCP dulu.");
         TogglePlayerSpectating(playerid, true);
-        if(Player[playerid][pUcpChecked] && !Player[playerid][pLogged])
-            ShowAuthForPlayer(playerid);
         return 0;
     }
     return 1;
@@ -213,22 +201,22 @@ public OnPlayerRequestSpawn(playerid)
 
 public OnPlayerSpawn(playerid)
 {
-    if(!Player[playerid][pSpawned])
+    if(!AccountData[playerid][IsLoggedIn] || !AccountData[playerid][pSpawned])
     {
         TogglePlayerSpectating(playerid, true);
         return 0;
     }
 
-    SetPlayerSkin(playerid, Player[playerid][pSkin]);
-    SetPlayerScore(playerid, Player[playerid][pLevel]);
+    SetPlayerSkin(playerid, AccountData[playerid][pSkin]);
+    SetPlayerScore(playerid, AccountData[playerid][pLevel]);
     ResetPlayerMoney(playerid);
-    GivePlayerMoney(playerid, Player[playerid][pMoney]);
-    SetPlayerHealth(playerid, Player[playerid][pHealth]);
-    SetPlayerArmour(playerid, Player[playerid][pArmour]);
-    SetPlayerInterior(playerid, Player[playerid][pInterior]);
-    SetPlayerVirtualWorld(playerid, Player[playerid][pWorld]);
-    SetPlayerPos(playerid, Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ]);
-    SetPlayerFacingAngle(playerid, Player[playerid][pPosA]);
+    GivePlayerMoney(playerid, AccountData[playerid][pMoney]);
+    SetPlayerHealth(playerid, AccountData[playerid][pHealth]);
+    SetPlayerArmour(playerid, AccountData[playerid][pArmor]);
+    SetPlayerInterior(playerid, AccountData[playerid][pInterior]);
+    SetPlayerVirtualWorld(playerid, AccountData[playerid][pWorld]);
+    SetPlayerPos(playerid, AccountData[playerid][pPosX], AccountData[playerid][pPosY], AccountData[playerid][pPosZ]);
+    SetPlayerFacingAngle(playerid, AccountData[playerid][pPosA]);
     SetCameraBehindPlayer(playerid);
     SetPlayerColor(playerid, COLOR_WHITE);
     return 1;
@@ -237,19 +225,19 @@ public OnPlayerSpawn(playerid)
 public OnPlayerDeath(playerid, killerid, reason)
 {
     #pragma unused killerid, reason
-    if(Player[playerid][pSpawned])
+    if(AccountData[playerid][pSpawned])
     {
-        Player[playerid][pHealth] = 100.0;
-        Player[playerid][pArmour] = 0.0;
+        AccountData[playerid][pHealth] = 100.0;
+        AccountData[playerid][pArmor] = 0.0;
     }
     return 1;
 }
 
 public OnPlayerCommandText(playerid, cmdtext[])
 {
-    if(!Player[playerid][pSpawned])
+    if(!AccountData[playerid][IsLoggedIn] || !AccountData[playerid][pSpawned])
     {
-        SendClientMessage(playerid, COLOR_LIGHTRED, "Kamu harus masuk ke karakter dulu.");
+        SendClientMessage(playerid, COLOR_LIGHTRED, "Login dan pilih karakter dulu.");
         return 1;
     }
 
@@ -258,11 +246,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new str[180];
         format(str, sizeof(str),
             "UCP: %s | Char: %s | Level: %d | Cash: $%d | Bank: $%d",
-            Player[playerid][pUcpName],
-            Player[playerid][pCharName],
-            Player[playerid][pLevel],
-            Player[playerid][pMoney],
-            Player[playerid][pBank]);
+            AccountData[playerid][pUCP],
+            AccountData[playerid][pName],
+            AccountData[playerid][pLevel],
+            AccountData[playerid][pMoney],
+            AccountData[playerid][pBankMoney]);
         SendClientMessage(playerid, COLOR_YELLOW, str);
         return 1;
     }
@@ -275,60 +263,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         case DIALOG_UNUSED: return 1;
 
-        case DIALOG_LOGIN:
-        {
-            if(!response) return DelayedKick(playerid);
-            if(!inputtext[0]) return ShowLoginDialog(playerid, "Password tidak boleh kosong.");
-
-            new hash[65];
-            SHA256_PassHash(inputtext, Player[playerid][pSalt], hash, sizeof(hash));
-
-            if(strcmp(hash, Player[playerid][pPassword]))
-            {
-                Player[playerid][pLoginTries]++;
-                if(Player[playerid][pLoginTries] >= 3)
-                {
-                    SendClientMessage(playerid, COLOR_LIGHTRED, "Terlalu banyak percobaan gagal.");
-                    return DelayedKick(playerid);
-                }
-
-                new str[80];
-                format(str, sizeof(str), "Password salah. Sisa kesempatan: %d", 3 - Player[playerid][pLoginTries]);
-                return ShowLoginDialog(playerid, str);
-            }
-
-            if(cache_is_valid(Player[playerid][pCache]))
-            {
-                cache_delete(Player[playerid][pCache]);
-                Player[playerid][pCache] = MYSQL_INVALID_CACHE;
-            }
-
-            if(Player[playerid][pLoginTimer])
-            {
-                KillTimer(Player[playerid][pLoginTimer]);
-                Player[playerid][pLoginTimer] = 0;
-            }
-
-            Player[playerid][pLogged] = true;
-            Player[playerid][pAuthShown] = false;
-            if(Player[playerid][pAuthTimer])
-            {
-                KillTimer(Player[playerid][pAuthTimer]);
-                Player[playerid][pAuthTimer] = 0;
-            }
-            SendClientMessage(playerid, COLOR_GREEN, "Login UCP berhasil.");
-
-            new query[128], ip[16];
-            GetPlayerIp(playerid, ip, sizeof(ip));
-            mysql_format(g_SQL, query, sizeof(query),
-                "UPDATE `ucp` SET `last_login` = CURRENT_TIMESTAMP, `ip` = '%e' WHERE `id` = %d LIMIT 1",
-                ip, Player[playerid][pUcpID]);
-            mysql_tquery(g_SQL, query);
-
-            LoadCharacterList(playerid);
-            return 1;
-        }
-
         case DIALOG_REGISTER:
         {
             if(!response) return DelayedKick(playerid);
@@ -337,40 +271,91 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if(len < 6 || len > 32)
                 return ShowRegisterDialog(playerid, "Password harus 6-32 karakter.");
 
-            for(new i = 0; i < 16; i++) Player[playerid][pSalt][i] = random(94) + 33;
-            Player[playerid][pSalt][16] = EOS;
-            SHA256_PassHash(inputtext, Player[playerid][pSalt], Player[playerid][pPassword], 65);
+            for(new i = 0; i < 16; i++) AccountData[playerid][pSalt][i] = random(94) + 33;
+            AccountData[playerid][pSalt][16] = EOS;
 
-            new query[280], ip[16];
-            GetPlayerIp(playerid, ip, sizeof(ip));
+            SHA256_PassHash(inputtext, AccountData[playerid][pSalt], AccountData[playerid][pPassword], 65);
+
+            new query[320];
             mysql_format(g_SQL, query, sizeof(query),
-                "INSERT INTO `ucp` (`username`, `password`, `salt`, `ip`) VALUES ('%e', '%e', '%e', '%e')",
-                Player[playerid][pUcpName],
-                Player[playerid][pPassword],
-                Player[playerid][pSalt],
-                ip);
-            mysql_tquery(g_SQL, query, "OnUcpRegistered", "dd", playerid, g_RaceCheck[playerid]);
+                "INSERT INTO `player_ucp` (`UCP`, `IP`, `Password`, `Salt`, `Register_Date`, `Last_Login`) VALUES ('%e', '%e', '%e', '%e', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                AccountData[playerid][pUCP],
+                AccountData[playerid][pIP],
+                AccountData[playerid][pPassword],
+                AccountData[playerid][pSalt]);
+            mysql_tquery(g_SQL, query, "OnUCPRegistered", "dd", playerid, g_MysqlRaceCheck[playerid]);
+            return 1;
+        }
+
+        case DIALOG_LOGIN:
+        {
+            if(!response) return DelayedKick(playerid);
+            if(!inputtext[0]) return ShowLoginDialog(playerid, "Password tidak boleh kosong.");
+
+            new hash[65];
+            SHA256_PassHash(inputtext, AccountData[playerid][pSalt], hash, sizeof(hash));
+
+            if(strcmp(hash, AccountData[playerid][pPassword]))
+            {
+                AccountData[playerid][pLoginAttempts]++;
+                if(AccountData[playerid][pLoginAttempts] >= 3)
+                {
+                    ShowPlayerDialog(playerid, DIALOG_UNUSED, DIALOG_STYLE_MSGBOX, "UCP - Login",
+                        "Password salah 3 kali.\nAnda ditendang dari server.", "Quit", "");
+                    return DelayedKick(playerid);
+                }
+
+                new str[80];
+                format(str, sizeof(str), "Password salah! Sisa kesempatan: %d", 3 - AccountData[playerid][pLoginAttempts]);
+                return ShowLoginDialog(playerid, str);
+            }
+
+            if(AccountData[playerid][pLoginTimer])
+            {
+                KillTimer(AccountData[playerid][pLoginTimer]);
+                AccountData[playerid][pLoginTimer] = 0;
+            }
+
+            AccountData[playerid][pUCPLogged] = true;
+            AccountData[playerid][pLoginAttempts] = 0;
+            SendClientMessage(playerid, COLOR_GREEN, "Login UCP berhasil. Memuat karakter...");
+
+            new query[160];
+            mysql_format(g_SQL, query, sizeof(query),
+                "UPDATE `player_ucp` SET `Last_Login` = CURRENT_TIMESTAMP, `IP` = '%e' WHERE `UCP` = '%e' LIMIT 1",
+                AccountData[playerid][pIP], AccountData[playerid][pUCP]);
+            mysql_tquery(g_SQL, query);
+
+            mysql_format(g_SQL, query, sizeof(query),
+                "SELECT `pID`, `Char_Name`, `Char_Level`, `Char_Money` FROM `player_characters` WHERE `Char_UCP` = '%e' LIMIT %d",
+                AccountData[playerid][pUCP], MAX_CHARS);
+            mysql_tquery(g_SQL, query, "LoadCharacter", "dd", playerid, g_MysqlRaceCheck[playerid]);
             return 1;
         }
 
         case DIALOG_CHAR_LIST:
         {
             if(!response) return DelayedKick(playerid);
+            if(!AccountData[playerid][pUCPLogged]) return DelayedKick(playerid);
 
-            if(listitem < 0 || listitem > Player[playerid][pCharCount]) return ShowCharacterList(playerid);
+            if(listitem < 0) return ShowCharacterList(playerid);
 
-            if(listitem == Player[playerid][pCharCount])
+            if(listitem >= AccountData[playerid][pCharCount])
             {
-                if(Player[playerid][pCharCount] >= MAX_CHARACTERS)
+                if(AccountData[playerid][pCharCount] >= MAX_CHARS)
                 {
-                    SendClientMessage(playerid, COLOR_LIGHTRED, "Slot karakter sudah penuh.");
+                    SendClientMessage(playerid, COLOR_LIGHTRED, "Slot karakter penuh (maks 3).");
                     return ShowCharacterList(playerid);
                 }
                 return ShowCharNameDialog(playerid, "");
             }
 
-            Player[playerid][pSelectedSlot] = listitem;
-            SelectCharacter(playerid, Player[playerid][pCharListID][listitem]);
+            new query[180];
+            mysql_format(g_SQL, query, sizeof(query),
+                "SELECT * FROM `player_characters` WHERE `pID` = %d AND `Char_UCP` = '%e' LIMIT 1",
+                AccountData[playerid][pCharListID][listitem],
+                AccountData[playerid][pUCP]);
+            mysql_tquery(g_SQL, query, "OnCharacterSelected", "dd", playerid, g_MysqlRaceCheck[playerid]);
             return 1;
         }
 
@@ -378,12 +363,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         {
             if(!response) return ShowCharacterList(playerid);
             if(!IsValidRoleplayName(inputtext))
-                return ShowCharNameDialog(playerid, "Format: Firstname_Lastname (contoh: John_Doe)");
+                return ShowCharNameDialog(playerid, "Format: Nama_Belakang (contoh: John_Doe)");
 
             new query[128];
             mysql_format(g_SQL, query, sizeof(query),
-                "SELECT `id` FROM `characters` WHERE `name` = '%e' LIMIT 1", inputtext);
-            mysql_tquery(g_SQL, query, "OnCharNameCheck", "dds", playerid, g_RaceCheck[playerid], inputtext);
+                "SELECT `pID` FROM `player_characters` WHERE `Char_Name` = '%e' LIMIT 1", inputtext);
+            mysql_tquery(g_SQL, query, "InsertPlayerName", "dds", playerid, g_MysqlRaceCheck[playerid], inputtext);
             return 1;
         }
 
@@ -392,8 +377,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if(!response) return ShowCharNameDialog(playerid, "");
             if(listitem < 0 || listitem > 1) return ShowGenderDialog(playerid);
 
-            Player[playerid][pTempGender] = listitem;
-            Player[playerid][pSkin] = listitem ? 40 : 26;
+            AccountData[playerid][pTempGender] = listitem + 1;
+            AccountData[playerid][pSkin] = (listitem == 0) ? 26 : 40;
             return ShowAgeDialog(playerid, "");
         }
 
@@ -403,244 +388,176 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
             new age = strval(inputtext);
             if(age < 16 || age > 80)
-                return ShowAgeDialog(playerid, "Umur harus 16-80 tahun.");
+                return ShowAgeDialog(playerid, "Umur harus 16-80.");
 
-            CreateCharacter(playerid, age);
+            AccountData[playerid][pTempAge] = age;
+            FinishCreateCharacter(playerid);
             return 1;
         }
     }
     return 0;
 }
 
-forward OnUcpCheck(playerid, race_check);
-public OnUcpCheck(playerid, race_check)
+forward CheckPlayerUCP(playerid, race_check);
+public CheckPlayerUCP(playerid, race_check)
 {
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return Kick(playerid);
     if(!IsPlayerConnected(playerid)) return 0;
 
-    Player[playerid][pUcpChecked] = true;
+    TogglePlayerSpectating(playerid, true);
 
-    if(cache_num_rows())
+    if(cache_num_rows() > 0)
     {
-        cache_get_value_name_int(0, "id", Player[playerid][pUcpID]);
-        cache_get_value_name(0, "password", Player[playerid][pPassword], 65);
-        cache_get_value_name(0, "salt", Player[playerid][pSalt], 17);
-        cache_get_value_name_int(0, "admin", Player[playerid][pAdmin]);
-        Player[playerid][pCache] = cache_save();
-        Player[playerid][pIsRegistered] = true;
+        cache_get_value_name(0, "Password", AccountData[playerid][pPassword], 65);
+        cache_get_value_name(0, "Salt", AccountData[playerid][pSalt], 17);
+        cache_get_value_name_int(0, "Admin", AccountData[playerid][pAdmin]);
+        cache_get_value_name_int(0, "ID", AccountData[playerid][pID]);
 
-        if(Player[playerid][pLoginTimer]) KillTimer(Player[playerid][pLoginTimer]);
-        Player[playerid][pLoginTimer] = SetTimerEx("OnLoginTimeout", SECONDS_TO_LOGIN * 1000, false, "d", playerid);
+        ShowLoginDialog(playerid, "");
+        AccountData[playerid][pLoginTimer] = SetTimerEx("OnPlayerNotLogin", SECONDS_TO_LOGIN * 1000, false, "d", playerid);
     }
     else
     {
-        Player[playerid][pIsRegistered] = false;
+        ShowRegisterDialog(playerid, "");
     }
-
-    ShowAuthForPlayer(playerid);
     return 1;
 }
 
-forward ForceAuthScreen(playerid);
-public ForceAuthScreen(playerid)
+forward OnUCPRegistered(playerid, race_check);
+public OnUCPRegistered(playerid, race_check)
 {
-    if(!IsPlayerConnected(playerid)) return 0;
-
-    if(Player[playerid][pLogged] || Player[playerid][pSpawned])
-    {
-        if(Player[playerid][pAuthTimer])
-        {
-            KillTimer(Player[playerid][pAuthTimer]);
-            Player[playerid][pAuthTimer] = 0;
-        }
-        return 0;
-    }
-
-    TogglePlayerSpectating(playerid, true);
-    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
-    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
-
-    if(Player[playerid][pUcpChecked] && !Player[playerid][pAuthShown])
-        ShowAuthForPlayer(playerid);
-
-    return 1;
-}
-
-public OnQueryError(errorid, const error[], const callback[], const query[], MySQL:handle)
-{
-    #pragma unused handle
-    printf("[MySQL ERROR] (%d) %s | callback: %s | query: %s", errorid, error, callback, query);
-    return 1;
-}
-
-stock ShowAuthForPlayer(playerid)
-{
-    if(!IsPlayerConnected(playerid)) return 0;
-    if(!Player[playerid][pUcpChecked]) return 0;
-    if(Player[playerid][pLogged] || Player[playerid][pSpawned]) return 0;
-
-    TogglePlayerSpectating(playerid, true);
-    SetPlayerCameraPos(playerid, 1480.34, -1731.11, 43.56);
-    SetPlayerCameraLookAt(playerid, 1478.19, -1764.27, 18.79);
-
-    Player[playerid][pAuthShown] = true;
-
-    if(Player[playerid][pIsRegistered]) ShowLoginDialog(playerid, "");
-    else ShowRegisterDialog(playerid, "");
-    return 1;
-}
-
-forward OnUcpRegistered(playerid, race_check);
-public OnUcpRegistered(playerid, race_check)
-{
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
     if(cache_insert_id() <= 0)
     {
-        SendClientMessage(playerid, COLOR_LIGHTRED, "Gagal membuat UCP. Coba lagi.");
-        return ShowRegisterDialog(playerid, "Registrasi gagal, gunakan nama lain / coba lagi.");
+        SendClientMessage(playerid, COLOR_LIGHTRED, "Gagal register UCP.");
+        return ShowRegisterDialog(playerid, "Registrasi gagal, coba lagi.");
     }
 
-    Player[playerid][pUcpID] = cache_insert_id();
-    Player[playerid][pLogged] = true;
-    Player[playerid][pAdmin] = 0;
-    Player[playerid][pAuthShown] = false;
-
-    if(Player[playerid][pAuthTimer])
-    {
-        KillTimer(Player[playerid][pAuthTimer]);
-        Player[playerid][pAuthTimer] = 0;
-    }
-
-    SendClientMessage(playerid, COLOR_GREEN, "Registrasi UCP berhasil.");
-    LoadCharacterList(playerid);
+    AccountData[playerid][pID] = cache_insert_id();
+    SendClientMessage(playerid, COLOR_GREEN, "UCP berhasil didaftarkan. Silakan login.");
+    ShowLoginDialog(playerid, "");
+    AccountData[playerid][pLoginTimer] = SetTimerEx("OnPlayerNotLogin", SECONDS_TO_LOGIN * 1000, false, "d", playerid);
     return 1;
 }
 
-forward OnCharactersLoaded(playerid, race_check);
-public OnCharactersLoaded(playerid, race_check)
+forward LoadCharacter(playerid, race_check);
+public LoadCharacter(playerid, race_check)
 {
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
-    Player[playerid][pCharCount] = 0;
+    AccountData[playerid][pCharCount] = 0;
 
     new rows = cache_num_rows();
-    if(rows > MAX_CHARACTERS) rows = MAX_CHARACTERS;
+    if(rows > MAX_CHARS) rows = MAX_CHARS;
 
     for(new i = 0; i < rows; i++)
     {
-        cache_get_value_name_int(i, "id", Player[playerid][pCharListID][i]);
-        cache_get_value_name(i, "name", CharListName[playerid][i], MAX_PLAYER_NAME);
-        cache_get_value_name_int(i, "level", Player[playerid][pCharListLevel][i]);
-        cache_get_value_name_int(i, "skin", Player[playerid][pCharListSkin][i]);
-        Player[playerid][pCharCount]++;
+        cache_get_value_name_int(i, "pID", AccountData[playerid][pCharListID][i]);
+        cache_get_value_name(i, "Char_Name", CharListName[playerid][i], MAX_PLAYER_NAME);
+        cache_get_value_name_int(i, "Char_Level", AccountData[playerid][pCharListLevel][i]);
+        cache_get_value_name_int(i, "Char_Money", AccountData[playerid][pCharListMoney][i]);
+        AccountData[playerid][pCharCount]++;
     }
 
-    SetTimerEx("ShowCharListDelayed", 150, false, "d", playerid);
-    return 1;
-}
-
-forward ShowCharListDelayed(playerid);
-public ShowCharListDelayed(playerid)
-{
-    if(!IsPlayerConnected(playerid) || !Player[playerid][pLogged]) return 0;
     ShowCharacterList(playerid);
     return 1;
 }
 
-forward OnCharNameCheck(playerid, race_check, name[]);
-public OnCharNameCheck(playerid, race_check, name[])
+forward InsertPlayerName(playerid, race_check, name[]);
+public InsertPlayerName(playerid, race_check, name[])
 {
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
-    if(cache_num_rows())
-        return ShowCharNameDialog(playerid, "Nama karakter sudah digunakan.");
+    if(cache_num_rows() > 0)
+        return ShowCharNameDialog(playerid, "Nama sudah digunakan!");
 
-    format(Player[playerid][pCharName], MAX_PLAYER_NAME, "%s", name);
+    format(AccountData[playerid][pName], MAX_PLAYER_NAME, "%s", name);
     ShowGenderDialog(playerid);
     return 1;
 }
 
-forward OnCharacterCreated(playerid, race_check);
-public OnCharacterCreated(playerid, race_check)
+forward OnPlayerRegister(playerid, race_check);
+public OnPlayerRegister(playerid, race_check)
 {
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
-    Player[playerid][pCharID] = cache_insert_id();
-    if(Player[playerid][pCharID] <= 0)
+    AccountData[playerid][pID] = cache_insert_id();
+    if(AccountData[playerid][pID] <= 0)
     {
         SendClientMessage(playerid, COLOR_LIGHTRED, "Gagal membuat karakter.");
         return ShowCharacterList(playerid);
     }
 
-    Player[playerid][pLevel] = 1;
-    Player[playerid][pMoney] = 5000;
-    Player[playerid][pBank] = 0;
-    Player[playerid][pHealth] = 100.0;
-    Player[playerid][pArmour] = 0.0;
-    Player[playerid][pPosX] = DEFAULT_POS_X;
-    Player[playerid][pPosY] = DEFAULT_POS_Y;
-    Player[playerid][pPosZ] = DEFAULT_POS_Z;
-    Player[playerid][pPosA] = DEFAULT_POS_A;
-    Player[playerid][pInterior] = 0;
-    Player[playerid][pWorld] = 0;
-    Player[playerid][pGender] = Player[playerid][pTempGender];
+    AccountData[playerid][pLevel] = 1;
+    AccountData[playerid][pMoney] = 5000;
+    AccountData[playerid][pBankMoney] = 0;
+    AccountData[playerid][pHealth] = 100.0;
+    AccountData[playerid][pArmor] = 0.0;
+    AccountData[playerid][pPosX] = DEFAULT_POS_X;
+    AccountData[playerid][pPosY] = DEFAULT_POS_Y;
+    AccountData[playerid][pPosZ] = DEFAULT_POS_Z;
+    AccountData[playerid][pPosA] = DEFAULT_POS_A;
+    AccountData[playerid][pInterior] = 0;
+    AccountData[playerid][pWorld] = 0;
+    AccountData[playerid][pGender] = AccountData[playerid][pTempGender];
+    AccountData[playerid][pAge] = AccountData[playerid][pTempAge];
 
     SendClientMessage(playerid, COLOR_GREEN, "Karakter berhasil dibuat.");
-    SpawnSelectedCharacter(playerid);
+    SpawnAsCharacter(playerid);
     return 1;
 }
 
 forward OnCharacterSelected(playerid, race_check);
 public OnCharacterSelected(playerid, race_check)
 {
-    if(race_check != g_RaceCheck[playerid]) return 0;
+    if(race_check != g_MysqlRaceCheck[playerid]) return 0;
     if(!IsPlayerConnected(playerid)) return 0;
 
     if(!cache_num_rows())
     {
         SendClientMessage(playerid, COLOR_LIGHTRED, "Karakter tidak ditemukan.");
-        return LoadCharacterList(playerid);
+        return ShowCharacterList(playerid);
     }
 
-    cache_get_value_name_int(0, "id", Player[playerid][pCharID]);
-    cache_get_value_name(0, "name", Player[playerid][pCharName], MAX_PLAYER_NAME);
-    cache_get_value_name_int(0, "level", Player[playerid][pLevel]);
-    cache_get_value_name_int(0, "money", Player[playerid][pMoney]);
-    cache_get_value_name_int(0, "bank", Player[playerid][pBank]);
-    cache_get_value_name_int(0, "skin", Player[playerid][pSkin]);
-    cache_get_value_name_int(0, "gender", Player[playerid][pGender]);
-    cache_get_value_name_int(0, "age", Player[playerid][pAge]);
-    cache_get_value_name_float(0, "health", Player[playerid][pHealth]);
-    cache_get_value_name_float(0, "armour", Player[playerid][pArmour]);
-    cache_get_value_name_float(0, "pos_x", Player[playerid][pPosX]);
-    cache_get_value_name_float(0, "pos_y", Player[playerid][pPosY]);
-    cache_get_value_name_float(0, "pos_z", Player[playerid][pPosZ]);
-    cache_get_value_name_float(0, "pos_a", Player[playerid][pPosA]);
-    cache_get_value_name_int(0, "interior", Player[playerid][pInterior]);
-    cache_get_value_name_int(0, "world", Player[playerid][pWorld]);
+    cache_get_value_name_int(0, "pID", AccountData[playerid][pID]);
+    cache_get_value_name(0, "Char_Name", AccountData[playerid][pName], MAX_PLAYER_NAME);
+    cache_get_value_name_int(0, "Char_Level", AccountData[playerid][pLevel]);
+    cache_get_value_name_int(0, "Char_Money", AccountData[playerid][pMoney]);
+    cache_get_value_name_int(0, "Char_BankMoney", AccountData[playerid][pBankMoney]);
+    cache_get_value_name_int(0, "Char_Skin", AccountData[playerid][pSkin]);
+    cache_get_value_name_int(0, "Char_Gender", AccountData[playerid][pGender]);
+    cache_get_value_name_int(0, "Char_Age", AccountData[playerid][pAge]);
+    cache_get_value_name_float(0, "Char_Health", AccountData[playerid][pHealth]);
+    cache_get_value_name_float(0, "Char_Armor", AccountData[playerid][pArmor]);
+    cache_get_value_name_float(0, "Char_PosX", AccountData[playerid][pPosX]);
+    cache_get_value_name_float(0, "Char_PosY", AccountData[playerid][pPosY]);
+    cache_get_value_name_float(0, "Char_PosZ", AccountData[playerid][pPosZ]);
+    cache_get_value_name_float(0, "Char_PosA", AccountData[playerid][pPosA]);
+    cache_get_value_name_int(0, "Char_IntID", AccountData[playerid][pInterior]);
+    cache_get_value_name_int(0, "Char_WID", AccountData[playerid][pWorld]);
 
-    if(Player[playerid][pHealth] < 10.0) Player[playerid][pHealth] = 100.0;
+    if(AccountData[playerid][pHealth] < 10.0) AccountData[playerid][pHealth] = 100.0;
 
-    new query[96];
+    new query[120];
     mysql_format(g_SQL, query, sizeof(query),
-        "UPDATE `characters` SET `last_login` = CURRENT_TIMESTAMP WHERE `id` = %d LIMIT 1",
-        Player[playerid][pCharID]);
+        "UPDATE `player_characters` SET `Char_LastLogin` = CURRENT_TIMESTAMP WHERE `pID` = %d LIMIT 1",
+        AccountData[playerid][pID]);
     mysql_tquery(g_SQL, query);
 
-    SpawnSelectedCharacter(playerid);
+    SpawnAsCharacter(playerid);
     return 1;
 }
 
-forward OnLoginTimeout(playerid);
-public OnLoginTimeout(playerid)
+forward OnPlayerNotLogin(playerid);
+public OnPlayerNotLogin(playerid)
 {
-    Player[playerid][pLoginTimer] = 0;
-    if(!IsPlayerConnected(playerid) || Player[playerid][pLogged]) return 0;
+    AccountData[playerid][pLoginTimer] = 0;
+    if(!IsPlayerConnected(playerid) || AccountData[playerid][pUCPLogged]) return 0;
 
     SendClientMessage(playerid, COLOR_LIGHTRED, "Timeout login UCP.");
     DelayedKick(playerid);
@@ -654,66 +571,75 @@ public KickPlayerDelayed(playerid)
     return 1;
 }
 
-stock ResetPlayerVars(playerid)
+stock ResetAccountData(playerid)
 {
-    static const empty[E_PLAYER];
-    Player[playerid] = empty;
-    Player[playerid][pCache] = MYSQL_INVALID_CACHE;
-    Player[playerid][pHealth] = 100.0;
+    static const empty[E_ACCOUNT];
+    AccountData[playerid] = empty;
+    AccountData[playerid][pHealth] = 100.0;
     return 1;
+}
+
+stock IsUCPAlreadyOnline(playerid)
+{
+    for(new i = 0, j = GetPlayerPoolSize(); i <= j; i++)
+    {
+        if(i == playerid || !IsPlayerConnected(i)) continue;
+        if(!AccountData[i][pUCPLogged] && !AccountData[i][IsLoggedIn]) continue;
+        if(!strcmp(AccountData[i][pUCP], AccountData[playerid][pUCP], true)) return 1;
+    }
+    return 0;
 }
 
 stock ShowLoginDialog(playerid, const extra[])
 {
-    new str[256];
+    new str[280];
     if(extra[0])
-        format(str, sizeof(str), "{FFFFFF}UCP: {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Masukkan password UCP:", Player[playerid][pUcpName], extra);
+        format(str, sizeof(str),
+            "{FFFFFF}Username {FFFF00}%s {FFFFFF}terdaftar.\n{FF6347}%s\n\n{FFFFFF}Masukkan password untuk login:",
+            AccountData[playerid][pUCP], extra);
     else
-        format(str, sizeof(str), "{FFFFFF}UCP: {FFFF00}%s\n{FFFFFF}Akun UCP ditemukan.\nMasukkan password:", Player[playerid][pUcpName]);
+        format(str, sizeof(str),
+            "{FFFFFF}Username {FFFF00}%s {FFFFFF}terdaftar.\nSilakan masukkan password untuk login:",
+            AccountData[playerid][pUCP]);
 
-    ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_PASSWORD, "Login UCP", str, "Login", "Keluar");
+    ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_PASSWORD, "UCP - Login", str, "Login", "Quit");
     return 1;
 }
 
 stock ShowRegisterDialog(playerid, const extra[])
 {
-    new str[256];
+    new str[280];
     if(extra[0])
-        format(str, sizeof(str), "{FFFFFF}UCP: {FFFF00}%s\n{FF6347}%s\n\n{FFFFFF}Buat password (6-32):", Player[playerid][pUcpName], extra);
+        format(str, sizeof(str),
+            "{FFFFFF}Selamat datang!\nUCP: {FF6347}%s\n{FF6347}%s\n\n{FFFFFF}Masukkan password untuk mendaftar:",
+            AccountData[playerid][pUCP], extra);
     else
-        format(str, sizeof(str), "{FFFFFF}UCP: {FFFF00}%s\n{FFFFFF}Belum terdaftar.\nBuat password UCP (6-32):", Player[playerid][pUcpName]);
+        format(str, sizeof(str),
+            "{FFFFFF}Selamat datang!\nUCP: {FF6347}%s\nBelum terdaftar.\n\n{FFFFFF}Masukkan password untuk mendaftar (6-32):",
+            AccountData[playerid][pUCP]);
 
-    ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Register UCP", str, "Daftar", "Keluar");
-    return 1;
-}
-
-stock LoadCharacterList(playerid)
-{
-    new query[160];
-    mysql_format(g_SQL, query, sizeof(query),
-        "SELECT `id`, `name`, `level`, `skin` FROM `characters` WHERE `ucp_id` = %d ORDER BY `id` ASC LIMIT %d",
-        Player[playerid][pUcpID], MAX_CHARACTERS);
-    mysql_tquery(g_SQL, query, "OnCharactersLoaded", "dd", playerid, g_RaceCheck[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "UCP - Register", str, "Daftar", "Quit");
     return 1;
 }
 
 stock ShowCharacterList(playerid)
 {
-    new list[512], line[80];
-    list[0] = EOS;
+    new list[560], line[96];
+    format(list, sizeof(list), "Nama\tLevel\tMoney\n");
 
-    for(new i = 0; i < Player[playerid][pCharCount]; i++)
+    for(new i = 0; i < AccountData[playerid][pCharCount]; i++)
     {
-        format(line, sizeof(line), "%s\tLevel %d\n", CharListName[playerid][i], Player[playerid][pCharListLevel][i]);
+        format(line, sizeof(line), "%s\tLevel %d\t$%d\n",
+            CharListName[playerid][i],
+            AccountData[playerid][pCharListLevel][i],
+            AccountData[playerid][pCharListMoney][i]);
         strcat(list, line);
     }
 
-    if(Player[playerid][pCharCount] < MAX_CHARACTERS)
+    if(AccountData[playerid][pCharCount] < MAX_CHARS)
         strcat(list, "{33AA33}+ Buat Karakter Baru\n");
 
-    if(!list[0]) strcat(list, "{33AA33}+ Buat Karakter Baru\n");
-
-    ShowPlayerDialog(playerid, DIALOG_CHAR_LIST, DIALOG_STYLE_TABLIST, "Pilih Karakter", list, "Pilih", "Keluar");
+    ShowPlayerDialog(playerid, DIALOG_CHAR_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Pilih Karakter", list, "Pilih", "Quit");
     return 1;
 }
 
@@ -721,11 +647,11 @@ stock ShowCharNameDialog(playerid, const extra[])
 {
     new str[220];
     if(extra[0])
-        format(str, sizeof(str), "{FF6347}%s\n\n{FFFFFF}Masukkan nama karakter:\nContoh: John_Doe", extra);
+        format(str, sizeof(str), "{FF6347}%s\n\n{FFFFFF}Masukkan nama karakter:\nContoh: John_Doe / Udin_Ahmad", extra);
     else
-        format(str, sizeof(str), "{FFFFFF}Masukkan nama karakter:\nFormat: Firstname_Lastname\nContoh: John_Doe");
+        format(str, sizeof(str), "{FFFFFF}Masukkan nama karakter:\nFormat: Nama_Belakang\nContoh: John_Doe / Udin_Ahmad");
 
-    ShowPlayerDialog(playerid, DIALOG_CHAR_NAME, DIALOG_STYLE_INPUT, "Buat Karakter", str, "Lanjut", "Kembali");
+    ShowPlayerDialog(playerid, DIALOG_CHAR_NAME, DIALOG_STYLE_INPUT, "Pembuatan Karakter", str, "Lanjut", "Kembali");
     return 1;
 }
 
@@ -739,7 +665,7 @@ stock ShowAgeDialog(playerid, const extra[])
 {
     new str[160];
     if(extra[0])
-        format(str, sizeof(str), "{FF6347}%s\n\n{FFFFFF}Masukkan umur karakter (16-80):", extra);
+        format(str, sizeof(str), "{FF6347}%s\n\n{FFFFFF}Masukkan umur (16-80):", extra);
     else
         format(str, sizeof(str), "{FFFFFF}Masukkan umur karakter (16-80):");
 
@@ -747,95 +673,78 @@ stock ShowAgeDialog(playerid, const extra[])
     return 1;
 }
 
-stock SelectCharacter(playerid, charid)
+stock FinishCreateCharacter(playerid)
 {
-    new query[160];
+    new query[420];
     mysql_format(g_SQL, query, sizeof(query),
-        "SELECT * FROM `characters` WHERE `id` = %d AND `ucp_id` = %d LIMIT 1",
-        charid, Player[playerid][pUcpID]);
-    mysql_tquery(g_SQL, query, "OnCharacterSelected", "dd", playerid, g_RaceCheck[playerid]);
-    return 1;
-}
-
-stock CreateCharacter(playerid, age)
-{
-    Player[playerid][pAge] = age;
-
-    new query[360];
-    mysql_format(g_SQL, query, sizeof(query),
-        "INSERT INTO `characters` (`ucp_id`,`name`,`skin`,`gender`,`age`,`money`,`pos_x`,`pos_y`,`pos_z`,`pos_a`) VALUES (%d,'%e',%d,%d,%d,5000,%f,%f,%f,%f)",
-        Player[playerid][pUcpID],
-        Player[playerid][pCharName],
-        Player[playerid][pSkin],
-        Player[playerid][pTempGender],
-        age,
+        "INSERT INTO `player_characters` (`Char_UCP`,`Char_Name`,`Char_IP`,`Char_Skin`,`Char_Gender`,`Char_Age`,`Char_Money`,`Char_PosX`,`Char_PosY`,`Char_PosZ`,`Char_PosA`,`Char_RegisterDate`,`Char_LastLogin`) VALUES ('%e','%e','%e',%d,%d,%d,5000,%f,%f,%f,%f,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+        AccountData[playerid][pUCP],
+        AccountData[playerid][pName],
+        AccountData[playerid][pIP],
+        AccountData[playerid][pSkin],
+        AccountData[playerid][pTempGender],
+        AccountData[playerid][pTempAge],
         DEFAULT_POS_X, DEFAULT_POS_Y, DEFAULT_POS_Z, DEFAULT_POS_A);
-    mysql_tquery(g_SQL, query, "OnCharacterCreated", "dd", playerid, g_RaceCheck[playerid]);
+    mysql_tquery(g_SQL, query, "OnPlayerRegister", "dd", playerid, g_MysqlRaceCheck[playerid]);
     return 1;
 }
 
-stock SpawnSelectedCharacter(playerid)
+stock SpawnAsCharacter(playerid)
 {
-    if(SetPlayerName(playerid, Player[playerid][pCharName]) == -1)
+    if(SetPlayerName(playerid, AccountData[playerid][pName]) == -1)
     {
-        SendClientMessage(playerid, COLOR_LIGHTRED, "Gagal set nama karakter (nama dipakai player lain).");
-        return LoadCharacterList(playerid);
+        SendClientMessage(playerid, COLOR_LIGHTRED, "Gagal set nama karakter (sedang dipakai).");
+        return ShowCharacterList(playerid);
     }
 
-    Player[playerid][pSpawned] = true;
-    Player[playerid][pAuthShown] = false;
-
-    if(Player[playerid][pAuthTimer])
-    {
-        KillTimer(Player[playerid][pAuthTimer]);
-        Player[playerid][pAuthTimer] = 0;
-    }
+    AccountData[playerid][IsLoggedIn] = true;
+    AccountData[playerid][pSpawned] = true;
 
     TogglePlayerSpectating(playerid, false);
-    SetSpawnInfo(playerid, NO_TEAM, Player[playerid][pSkin],
-        Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ], Player[playerid][pPosA],
+    SetSpawnInfo(playerid, NO_TEAM, AccountData[playerid][pSkin],
+        AccountData[playerid][pPosX], AccountData[playerid][pPosY], AccountData[playerid][pPosZ], AccountData[playerid][pPosA],
         0, 0, 0, 0, 0, 0);
     SpawnPlayer(playerid);
 
     new str[96];
-    format(str, sizeof(str), "Masuk sebagai {FFFF00}%s", Player[playerid][pCharName]);
+    format(str, sizeof(str), "Spawn sebagai {FFFF00}%s", AccountData[playerid][pName]);
     SendClientMessage(playerid, COLOR_GREEN, str);
     return 1;
 }
 
 stock SaveCharacterData(playerid, reason)
 {
-    if(!Player[playerid][pSpawned] || Player[playerid][pCharID] <= 0) return 0;
+    if(!AccountData[playerid][IsLoggedIn] || !AccountData[playerid][pSpawned] || AccountData[playerid][pID] <= 0) return 0;
 
     if(reason == 1)
     {
-        GetPlayerPos(playerid, Player[playerid][pPosX], Player[playerid][pPosY], Player[playerid][pPosZ]);
-        GetPlayerFacingAngle(playerid, Player[playerid][pPosA]);
-        GetPlayerHealth(playerid, Player[playerid][pHealth]);
-        GetPlayerArmour(playerid, Player[playerid][pArmour]);
-        Player[playerid][pInterior] = GetPlayerInterior(playerid);
-        Player[playerid][pWorld] = GetPlayerVirtualWorld(playerid);
-        Player[playerid][pMoney] = GetPlayerMoney(playerid);
-        Player[playerid][pSkin] = GetPlayerSkin(playerid);
-        Player[playerid][pLevel] = GetPlayerScore(playerid);
+        GetPlayerPos(playerid, AccountData[playerid][pPosX], AccountData[playerid][pPosY], AccountData[playerid][pPosZ]);
+        GetPlayerFacingAngle(playerid, AccountData[playerid][pPosA]);
+        GetPlayerHealth(playerid, AccountData[playerid][pHealth]);
+        GetPlayerArmour(playerid, AccountData[playerid][pArmor]);
+        AccountData[playerid][pInterior] = GetPlayerInterior(playerid);
+        AccountData[playerid][pWorld] = GetPlayerVirtualWorld(playerid);
+        AccountData[playerid][pMoney] = GetPlayerMoney(playerid);
+        AccountData[playerid][pSkin] = GetPlayerSkin(playerid);
+        AccountData[playerid][pLevel] = GetPlayerScore(playerid);
     }
 
-    new query[360];
+    new query[380];
     mysql_format(g_SQL, query, sizeof(query),
-        "UPDATE `characters` SET `level`=%d,`money`=%d,`bank`=%d,`skin`=%d,`health`=%f,`armour`=%f,`pos_x`=%f,`pos_y`=%f,`pos_z`=%f,`pos_a`=%f,`interior`=%d,`world`=%d WHERE `id`=%d LIMIT 1",
-        Player[playerid][pLevel],
-        Player[playerid][pMoney],
-        Player[playerid][pBank],
-        Player[playerid][pSkin],
-        Player[playerid][pHealth],
-        Player[playerid][pArmour],
-        Player[playerid][pPosX],
-        Player[playerid][pPosY],
-        Player[playerid][pPosZ],
-        Player[playerid][pPosA],
-        Player[playerid][pInterior],
-        Player[playerid][pWorld],
-        Player[playerid][pCharID]);
+        "UPDATE `player_characters` SET `Char_Level`=%d,`Char_Money`=%d,`Char_BankMoney`=%d,`Char_Skin`=%d,`Char_Health`=%f,`Char_Armor`=%f,`Char_PosX`=%f,`Char_PosY`=%f,`Char_PosZ`=%f,`Char_PosA`=%f,`Char_IntID`=%d,`Char_WID`=%d WHERE `pID`=%d LIMIT 1",
+        AccountData[playerid][pLevel],
+        AccountData[playerid][pMoney],
+        AccountData[playerid][pBankMoney],
+        AccountData[playerid][pSkin],
+        AccountData[playerid][pHealth],
+        AccountData[playerid][pArmor],
+        AccountData[playerid][pPosX],
+        AccountData[playerid][pPosY],
+        AccountData[playerid][pPosZ],
+        AccountData[playerid][pPosA],
+        AccountData[playerid][pInterior],
+        AccountData[playerid][pWorld],
+        AccountData[playerid][pID]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -857,7 +766,6 @@ stock IsValidRoleplayName(const name[])
         }
         if(!((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z'))) return 0;
     }
-
     if(underscore != 1) return 0;
     if(name[0] < 'A' || name[0] > 'Z') return 0;
     return 1;
