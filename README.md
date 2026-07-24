@@ -33,13 +33,7 @@ Kalau struktur lama beda, drop dulu:
 DROP DATABASE IF EXISTS vxrp;
 ```
 
-Lalu import:
-
-```bash
-mysql -u root -p < database/vxrp.sql
-```
-
-Atau import `database/vxrp.sql` lewat phpMyAdmin.
+Lalu import `database/vxrp.sql` lewat phpMyAdmin / MySQL.
 
 ### 2. Kredensial
 
@@ -52,16 +46,34 @@ Edit di `gamemodes/main.pwn`:
 #define MYSQL_DATABASE  "vxrp"
 ```
 
-### 3. Plugin MySQL
+### 3. Plugin MySQL (WAJIB)
 
-Download R41-4: https://github.com/pBlueG/SA-MP-MySQL/releases/tag/R41-4
-
-Ekstrak `mysql-R41-4-win32.zip`:
+Struktur file yang benar:
 
 ```
-samp-server.exe
-libmariadb.dll
-plugins/mysql.dll
+folder server/
+  samp-server.exe
+  libmariadb.dll      <-- root (WAJIB)
+  log-core.dll        <-- root (disarankan)
+  plugins/
+    mysql.dll         <-- plugins (WAJIB)
+  gamemodes/
+    main.amx
+  server.cfg          <-- plugins mysql
+```
+
+File ini sudah ada di repo. Kalau masih `Loading plugin: mysql / Failed`:
+
+1. Pastikan `libmariadb.dll` **bukan** di dalam `plugins/`
+2. Install [VC++ Redistributable x86](https://aka.ms/vs/17/release/vc_redist.x86.exe)
+3. Restart PC, jalankan `samp-server.exe` lagi
+
+Log sukses:
+
+```
+Loading plugin: mysql
+  >> plugin.mysql: Rxx successfully loaded.
+ Loaded 1 plugins.
 ```
 
 ### 4. Compile
@@ -71,11 +83,18 @@ Jangan compile file `.sql`.
 
 ### 5. Jalankan
 
-Log sukses:
-
 ```
 [MySQL] Koneksi berhasil (database: vxrp).
 ```
+
+## Error umum
+
+| Log | Arti | Perbaikan |
+|-----|------|-----------|
+| `Loading plugin: mysql` `Failed` | Plugin/DLL dependency hilang | Cek `libmariadb.dll` + VC++ x86 |
+| `Run time error 19` | Native MySQL tidak ada | Karena plugin gagal load |
+| `cannot read from file: "a_mysql"` | Include hilang | Pastikan `pawno/include/a_mysql.inc` |
+| Compile `vxrp.sql` error | Salah buka file | Compile `main.pwn`, bukan `.sql` |
 
 ## Tabel
 
@@ -83,8 +102,3 @@ Log sukses:
 |-------|-----|
 | `player_ucp` | Akun UCP |
 | `player_characters` | Karakter roleplay |
-
-## Catatan
-
-- Nama client SA-MP = nama UCP
-- Nama karakter diganti otomatis setelah pilih/buat char
