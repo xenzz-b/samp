@@ -440,29 +440,29 @@ stock DelayedKick(playerid, time = 500)
 
 stock SetupPlayerTable()
 {
-    mysql_tquery(g_SQL,
-        "CREATE TABLE IF NOT EXISTS `players` ("
-        "`id` INT(11) NOT NULL AUTO_INCREMENT,"
-        "`username` VARCHAR(24) NOT NULL,"
-        "`password` CHAR(64) NOT NULL,"
-        "`salt` CHAR(16) NOT NULL,"
-        "`ip` VARCHAR(16) NOT NULL DEFAULT '',"
-        "`score` INT(11) NOT NULL DEFAULT 0,"
-        "`money` INT(11) NOT NULL DEFAULT 5000,"
-        "`skin` INT(11) NOT NULL DEFAULT 26,"
-        "`kills` INT(11) NOT NULL DEFAULT 0,"
-        "`deaths` INT(11) NOT NULL DEFAULT 0,"
-        "`pos_x` FLOAT NOT NULL DEFAULT 0,"
-        "`pos_y` FLOAT NOT NULL DEFAULT 0,"
-        "`pos_z` FLOAT NOT NULL DEFAULT 0,"
-        "`pos_a` FLOAT NOT NULL DEFAULT 0,"
-        "`interior` INT(11) NOT NULL DEFAULT 0,"
-        "`world` INT(11) NOT NULL DEFAULT 0,"
-        "`created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-        "`last_login` TIMESTAMP NULL DEFAULT NULL,"
-        "PRIMARY KEY (`id`),"
-        "UNIQUE KEY `username` (`username`)"
-        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    new query[768];
+    strcat(query, "CREATE TABLE IF NOT EXISTS `players` (");
+    strcat(query, "`id` INT(11) NOT NULL AUTO_INCREMENT,");
+    strcat(query, "`username` VARCHAR(24) NOT NULL,");
+    strcat(query, "`password` CHAR(64) NOT NULL,");
+    strcat(query, "`salt` CHAR(16) NOT NULL,");
+    strcat(query, "`ip` VARCHAR(16) NOT NULL DEFAULT '',");
+    strcat(query, "`score` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`money` INT(11) NOT NULL DEFAULT 5000,");
+    strcat(query, "`skin` INT(11) NOT NULL DEFAULT 26,");
+    strcat(query, "`kills` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`deaths` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`pos_x` FLOAT NOT NULL DEFAULT 0,");
+    strcat(query, "`pos_y` FLOAT NOT NULL DEFAULT 0,");
+    strcat(query, "`pos_z` FLOAT NOT NULL DEFAULT 0,");
+    strcat(query, "`pos_a` FLOAT NOT NULL DEFAULT 0,");
+    strcat(query, "`interior` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`world` INT(11) NOT NULL DEFAULT 0,");
+    strcat(query, "`created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,");
+    strcat(query, "`last_login` TIMESTAMP NULL DEFAULT NULL,");
+    strcat(query, "PRIMARY KEY (`id`), UNIQUE KEY `username` (`username`))");
+    strcat(query, " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    mysql_tquery(g_SQL, query);
     return 1;
 }
 
@@ -483,7 +483,7 @@ stock SavePlayerData(playerid, reason)
 
     new query[320];
     mysql_format(g_SQL, query, sizeof(query),
-        "UPDATE `players` SET `score` = %d, `money` = %d, `skin` = %d, `pos_x` = %f, `pos_y` = %f, `pos_z` = %f, `pos_a` = %f, `interior` = %d, `world` = %d WHERE `id` = %d LIMIT 1",
+        "UPDATE `players` SET `score`=%d,`money`=%d,`skin`=%d,`pos_x`=%f,`pos_y`=%f,`pos_z`=%f,`pos_a`=%f,`interior`=%d,`world`=%d WHERE `id`=%d LIMIT 1",
         Player[playerid][pScore],
         Player[playerid][pMoney],
         Player[playerid][pSkin],
