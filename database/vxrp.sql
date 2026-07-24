@@ -1,0 +1,41 @@
+CREATE DATABASE IF NOT EXISTS `vxrp` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `vxrp`;
+
+CREATE TABLE IF NOT EXISTS `ucp` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(24) NOT NULL,
+    `password` CHAR(64) NOT NULL,
+    `salt` CHAR(16) NOT NULL,
+    `ip` VARCHAR(16) NOT NULL DEFAULT '',
+    `admin` TINYINT(3) NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_login` TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `characters` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `ucp_id` INT(11) NOT NULL,
+    `name` VARCHAR(24) NOT NULL,
+    `level` INT(11) NOT NULL DEFAULT 1,
+    `money` INT(11) NOT NULL DEFAULT 5000,
+    `bank` INT(11) NOT NULL DEFAULT 0,
+    `skin` INT(11) NOT NULL DEFAULT 26,
+    `gender` TINYINT(1) NOT NULL DEFAULT 0,
+    `age` TINYINT(3) NOT NULL DEFAULT 18,
+    `health` FLOAT NOT NULL DEFAULT 100.0,
+    `armour` FLOAT NOT NULL DEFAULT 0.0,
+    `pos_x` FLOAT NOT NULL DEFAULT 1958.3783,
+    `pos_y` FLOAT NOT NULL DEFAULT 1343.1572,
+    `pos_z` FLOAT NOT NULL DEFAULT 15.3746,
+    `pos_a` FLOAT NOT NULL DEFAULT 270.1425,
+    `interior` INT(11) NOT NULL DEFAULT 0,
+    `world` INT(11) NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_login` TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `name` (`name`),
+    KEY `ucp_id` (`ucp_id`),
+    CONSTRAINT `fk_characters_ucp` FOREIGN KEY (`ucp_id`) REFERENCES `ucp` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

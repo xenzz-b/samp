@@ -1,23 +1,35 @@
-# SA-MP Server
+# VXRP SA-MP Server
 
-Gamemode dasar dengan sistem register/login berbasis MySQL.
+Gamemode Roleplay dengan sistem UCP + Character berbasis MySQL.
 
 ## Fitur
 
-- Register & login (dialog password)
-- Database MySQL (plugin BlueG R41-4)
-- Password di-hash SHA256 + salt
-- Auto-save posisi, money, score, skin saat disconnect
-- Kick jika password salah 3x / timeout login 60 detik
+- Register / Login **UCP** (nama akun)
+- Pilih / buat **Character** (nama roleplay)
+- Maksimal 3 karakter per UCP
+- Database MySQL (`database/vxrp.sql`)
+- Password SHA256 + salt
+- Auto-save data karakter saat disconnect
 - Command `/stats`
+
+## Alur player
+
+1. Masuk server (nama SA-MP = nama UCP)
+2. Dialog Register / Login UCP
+3. Dialog pilih karakter / buat karakter baru
+4. Spawn ke dunia game
 
 ## Setup
 
 ### 1. Database
 
+Import skema:
+
 ```bash
-mysql -u root -p < database.sql
+mysql -u root -p < database/vxrp.sql
 ```
+
+Atau lewat phpMyAdmin: import file `database/vxrp.sql`.
 
 Sesuaikan kredensial di `gamemodes/main.pwn`:
 
@@ -25,7 +37,7 @@ Sesuaikan kredensial di `gamemodes/main.pwn`:
 #define MYSQL_HOST      "127.0.0.1"
 #define MYSQL_USER      "root"
 #define MYSQL_PASSWORD  ""
-#define MYSQL_DATABASE  "samp"
+#define MYSQL_DATABASE  "vxrp"
 ```
 
 ### 2. Plugin MySQL
